@@ -239,6 +239,15 @@ Image adjustBrightness(const Image& input, int value) {
     // For each pixel and each channel:
     //   new_value = input(y, x, c) + value
     //   output(y, x, c) = max(0, min(255, new_value))
+    int new_value = 0 ; 
+    for(int y = 0 ; y < height ; y++){
+        for(int x  = 0 ; x < width ; x++){
+            for(int c = 0 ; c < channels ; c++){
+                new_value = input(y , x , c) + value ;
+                output(y , x , c) = max(0 , min(255 , new_value));
+            }
+        }
+    }
     
     return output;
 }
@@ -265,7 +274,6 @@ Image adjustContrast(const Image& input, float factor) {
     // For each pixel and each channel:
     //   new_value = factor * (input(y, x, c) - 128) + 128
     //   output(y, x, c) = max(0, min(255, new_value))
-    
     return output;
 }
 
@@ -292,7 +300,6 @@ Image applyBlur(const Image& input) {
     //   For each neighbor (ky from -1 to 1, kx from -1 to 1):
     //     sum += input(y+ky, x+kx, c)
     //   output(y, x, c) = sum / 9
-    
     return output;
 }
 
