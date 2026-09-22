@@ -174,16 +174,29 @@ Image convertToGrayscale(const Image& input) {
  *    - To position (y, width - 1 - x) in the output
  * 3. Return the flipped image
  */
+
+
 Image flipHorizontal(const Image& input) {
     int height = input.getHeight();
     int width = input.getWidth();
     int channels = input.getChannels();
     Image output(width, height, channels);
     
-    // TODO: Implement this function
-    // For each pixel and each channel:
-    //   output(y, width-1-x, c) = input(y, x, c)
     
+    for (int y = 0; y < height;y++)
+    {
+        for (int x = 0; x < width;x++)
+        {
+            for (int c = 0;c < channels;c++)
+            {
+                output(y, width - 1 - x, c) = input(y, x, c);
+            }
+        }
+    }
+
+
+
+
     return output;
 }
 
