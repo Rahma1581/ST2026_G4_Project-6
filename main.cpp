@@ -450,8 +450,7 @@ int main() {
     
     // Create a 4x4 test image
     createTestImage("test_image.ppm");
-    
-    // Load the image
+
     Image input;
     if (!input.loadPPM("test_image.ppm")) {
         cerr << "Failed to load image. Exiting.\n";
