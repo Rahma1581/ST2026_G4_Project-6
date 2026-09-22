@@ -55,6 +55,19 @@ public:
         return data[y][x][channel];
     }
     
+    // Reads the next PPM token, skipping over any '#' comment lines
+    static bool readToken(istream& file, int& value) {
+        while (file >> ws) {
+            if (file.peek() == '#') {
+                string comment;
+                getline(file, comment);
+            } else {
+                break;
+            }
+        }
+        return static_cast<bool>(file >> value);
+    }
+    
     // Load PPM image (P3 format)
     bool loadPPM(const string& filename) {
         ifstream file(filename);
@@ -70,24 +83,46 @@ public:
             return false;
         }
         
-        file >> width >> height >> maxVal;
+        int w = 0, h = 0, mv = 0;
+        if (!readToken(file, w) || !readToken(file, h) || !readToken(file, mv)) {
+            cerr << "Error: Could not read the PPM header of " << filename << endl;
+            return false;
+        }
+        if (w <= 0 || h <= 0 || mv <= 0) {
+            cerr << "Error: Invalid PPM header values in " << filename << endl;
+            return false;
+        }
+        
+        width = w;
+        height = h;
+        maxVal = mv;
         channels = 3;
-        data.resize(height, vector<vector<int>>(width, vector<int>(channels, 0)));
+        
+        // Rebuild the matrix from scratch so that loading a second image
+        // into the same object cannot leave rows of the previous size behind
+        data.assign(height, vector<vector<int>>(width, vector<int>(channels, 0)));
         
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 for (int c = 0; c < channels; c++) {
-                    file >> data[y][x][c];
+                    if (!readToken(file, data[y][x][c])) {
+                        cerr << "Error: " << filename << " ended before all pixels were read" << endl;
+                        return false;
+                    }
                 }
             }
         }
         
-        file.close();
         return true;
     }
     
     // Save PPM image (P3 format)
     bool savePPM(const string& filename) const {
+        if (width <= 0 || height <= 0) {
+            cerr << "Error: Cannot save an empty image to " << filename << endl;
+            return false;
+        }
+        
         ofstream file(filename);
         if (!file.is_open()) {
             cerr << "Error: Could not create file " << filename << endl;
@@ -103,8 +138,8 @@ public:
                     int gray = data[y][x][0];
                     file << gray << " " << gray << " " << gray << " ";
                 } else {
-                    // For color images, write all three channels
-                    for (int c = 0; c < 3; c++) {
+                    // For color images, write the R, G and B channels
+                    for (int c = 0; c < 3 && c < channels; c++) {
                         file << data[y][x][c] << " ";
                     }
                 }
@@ -149,6 +184,11 @@ Image convertToGrayscale(const Image& input) {
     int height = input.getHeight();
     int width = input.getWidth();
     Image output(width, height, 1); // Single channel for grayscale
+    
+    if (input.getChannels() < 3) {
+        cerr << "Error: Grayscale conversion needs a 3-channel (RGB) image" << endl;
+        return output;
+    }
     
    for (int y =0; y< height; y++) {
     for (int x =0; x< width; x++){
@@ -287,7 +327,7 @@ Image adjustContrast(const Image& input, float factor) {
     for(int y = 0 ; y < height ; y++){
         for(int x  = 0 ; x < width ; x++){
             for(int c = 0 ; c < channels ; c++){
-                new_value = factor * (input(y, x, c) - 128) + 128;
+                new_value = static_cast<int>(round(factor * (input(y, x, c) - 128) + 128));
                 output(y, x, c) = max(0, min(255, new_value));
             }
         }
@@ -301,9 +341,10 @@ Image adjustContrast(const Image& input, float factor) {
  * 
  * Steps:
  * 1. Create a new image with the same dimensions as the input
- * 2. For each pixel (excluding borders):
+ * 2. For each pixel:
  *    - For each color channel:
  *        - Calculate the average of the 3x3 neighborhood
+ *          (at the borders only the neighbours inside the image are averaged)
  *        - Set the output pixel to this average value
  * 3. Return the blurred image
  */
@@ -312,13 +353,30 @@ Image applyBlur(const Image& input) {
     int width = input.getWidth();
     int channels = input.getChannels();
     Image output(width, height, channels);
-    
-    // TODO: Implement this function
-    // For each pixel (from y=1 to height-2, x=1 to width-2) and each channel:
-    //   sum = 0
-    //   For each neighbor (ky from -1 to 1, kx from -1 to 1):
-    //     sum += input(y+ky, x+kx, c)
-    //   output(y, x, c) = sum / 9
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (int c = 0; c < channels; c++) {
+                int sum = 0;
+                int count = 0;
+
+                for (int ky = -1; ky <= 1; ky++) {
+                    for (int kx = -1; kx <= 1; kx++) {
+                        int ny = y + ky;
+                        int nx = x + kx;
+
+                        if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                            sum += input(ny, nx, c);
+                            count++;
+                        }
+                    }
+                }
+
+                output(y, x, c) = (count > 0) ? (sum / count) : input(y, x, c);
+            }
+        }
+    }
+
     return output;
 }
 
@@ -337,11 +395,15 @@ Image rotate90(const Image& input) {
     int width = input.getWidth();
     int channels = input.getChannels();
     Image output(height, width, channels); // Width and height are swapped
-    
-    // TODO: Implement this function
-    // For each pixel and each channel:
-    //   output(x, height-1-y, c) = input(y, x, c)
-    
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            for (int c = 0; c < channels; c++) {
+                output(x, height - 1 - y, c) = input(y, x, c);
+            }
+        }
+    }
+
     return output;
 }
 
